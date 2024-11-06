@@ -30,7 +30,7 @@ if [ $step = "sfcprep" ]; then
     export nth_sfcprep=1
     export npe_node_sfcprep=1
     export NTASKS=$npe_sfcprep
-    export memory_sfcprep="2GB"
+    export memory_sfcprep="10GB"
 
 elif [ $step = "prep" -o $step = "prepbufr" ]; then
 
