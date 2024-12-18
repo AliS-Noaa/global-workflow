@@ -4,7 +4,7 @@ GFS V16.3.21 RELEASE NOTES
 PRELUDE
 -------
 
-The WAFS is separated from the GFS and is now its own package in production as WAFS.v7.0.0.
+The WAFS is separated from the GFS and is now its own package in production as WAFS.v7.0.1.
 
 IMPLEMENTATION INSTRUCTIONS
 ---------------------------
@@ -127,30 +127,28 @@ CHANGES TO FILE AND FILE SIZES
 ------------------------------
 
 The following files will no longer be produced within the GFS COM:
-* `gfs.tCCz.awf_0p25.fFFF.grib2` - renamed to `wafs.tCCz.awf.0p25.fFFF.grib2` in WAFSv7
+* `gfs.tCCz.awf_0p25.fFFF.grib2`  - renamed to `wafs.tCCz.awf.0p25.fFFF.grib2` in WAFSv7. Filesize is changed from 55M to 56M with 7 extra levels of aviation fields.
 * `gfs.tCCz.awf_grb45fFF.grib2` - renamed to `wafs.tCCz.awf_grid45.fFFF.grib2` in WAFSv7
 * `wmo/grib2.tCCz.awf_grbfFF.45` - renamed to `wmo/grib2.wafs.tCCz.awf_grid45.fFFF` in WAFSv7
-* `gfs.tCCz.control.wafsblending_0p25`
 * `gfs.tCCz.wafs.0p25.anl` - renamed to `wafs.tCCz.0p25.anl.grib2` in WAFSv7
 * `gfs.tCCz.wafs.0p25.anl.idx`
-* `gfs.tCCz.wafs_0p25.fFFF.grib2`
-* `gfs.tCCz.wafs_0p25.fFFF.grib2.idx`
 * `gfs.tCCz.wafs_0p25_unblended.fFFF.grib2` - renamed to `WAFS_0p25_unblended_YYYYMMDDHHfFFF.grib2` in WAFSv7
 * `gfs.tCCz.wafs_0p25_unblended.fFFF.grib2.idx`
-* `gfs.tCCz.wafs.grb2fFFF` - renamed to `wafs.tCCz.master.fFFF.grib2` in WAFSv7
+* `gfs.tCCz.wafs.grb2fFFF` - renamed to `wafs.tCCz.master.fFFF.grib2` in WAFSv7. Between forecast hours [006-048], filesize is changed from 929M to 936M with 7 extra levels of aviation fields; for f000, filesize increases from 949M to 956M with 7 extra levels of aviation fields. No size change for other forecast hours
 * `gfs.tCCz.wafs.grb2fFFF.idx`
 * `gfs.tCCz.wafs_grb45fFF.grib2` - renamed to `gfs.tCCz.wafs_grb45fFFF.grib2` in WAFSv7
 * `gfs.tCCz.wafs_grb45fFF.grib2.idx`
 * `wmo/grib2.tCCz.wafs_grbfFF.45` - renamed to `wmo/grib2.wafs.tCCz.awf_grid45.fFFF` in WAFSv7
-* `wmo/xtrn.wfsgfs0006.gfs_atmos_wafs_f30_00`
-* `gfs.tCCz.gcip.fFF.grib2` - renamed to `wafs.tCCz.gcip.fFFF.grib2` in WAFSv7
+* `wmo/xtrn.wfsgfsCCFF[a/b].gfs_atmos_wafs_fFF_CC` - renamed to `wmo/xtrn.wfsgfsCCFF[a/b]` in WAFSv7
+* `gfs.tCCz.gcip.f00.grib2` - renamed to `wafs.tCCz.gcip.f000.grib2` in WAFSv7
 * `WAFS_0p25_blended_YYYYMMDDHHf[06-48].grib2` - renamed to `WAFS_0p25_blended_ YYYYMMDDHHfFFF.grib2` in WAFSv7
 
 The following files will no longer be produced within the GFS COM
-and are being retired from the WAFS package:
+and are being retired from the WAFS package, which will free 20G:
 * `gfs.tCCz.wafs_icao.grb2fFFF`
 * `gfs.tCCz.wafs_icao.grb2fFFF.idx`
 * `wafs.tCCz.master.fFFF.grib2` where FFF is from 001 to 005
+* `gfs.tCCz.control.wafsblending_0p25`
 
 ENVIRONMENT AND RESOURCE CHANGES
 --------------------------------
