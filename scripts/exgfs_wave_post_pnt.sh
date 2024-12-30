@@ -252,7 +252,7 @@
     HMS="$(echo $CDATE | cut -c9-10)0000"
     if [ -f $COMIN/rundata/${WAV_MOD_TAG}.out_pnt.${waveuoutpGRD}.${YMD}.${HMS} ]
     then
-      ln -s $COMIN/rundata/${WAV_MOD_TAG}.out_pnt.${waveuoutpGRD}.${YMD}.${HMS} ./out_pnt.${waveuoutpGRD}   
+      ln -s $COMIN/rundata/${WAV_MOD_TAG}.out_pnt.${waveuoutpGRD}.${YMD}.${HMS}
     else
       echo '*************************************************** '
       echo " FATAL ERROR : NO RAW POINT OUTPUT FILE out_pnt.${waveuoutpGRD}.${YMD}.${HMS} "
@@ -264,10 +264,10 @@
     fi
     
     rm -f buoy_tmp.loc buoy_log.ww3 ww3_oup.inp
-    ln -fs ./out_pnt.${waveuoutpGRD} ./out_pnt.ww3
+    ln -fs ${WAV_MOD_TAG}.out_pnt.${waveuoutpGRD}.${YMD}.${HMS} ./out_pnt.ww3
     ln -fs ./mod_def.${waveuoutpGRD} ./mod_def.ww3
     export pgm=ww3_outp;. prep_step
-    $EXECwave/ww3_outp > buoy_lst.loc 2>&1 
+    $EXECwave/ww3_outp ${WAV_MOD_TAG} > buoy_lst.loc 2>&1 
     export err=$?;err_chk
 
 
@@ -345,6 +345,104 @@
   echo '   Making command file for wave post points '
   [[ "$LOUD" = YES ]] && set -x
 
+  if true; then
+    grep -F -f ibp_tags buoy_lst.loc | awk '{ print $1 }' > buoys
+    grep -F -f buoys buoy_log.ww3 | awk '{ print $1 }' > points
+    rm buoys
+
+    if [ "$DOBLL_WAV" = "YES" ] && [ "$DOSPC_WAV" = "NO" ]; then
+        cat << EOF > ww3_outp_auto.inp
+$ WAVEWATCH III Point output post-processing
+$ ------------------------------------------
+  TIME  DT  COUNT
+$
+EOF
+        cat points >> ww3_outp_auto.inp
+        cat << EOF >> ww3_outp_auto.inp
+ -1
+$
+  4
+  4 1 REFT 'UTC'
+$
+$ End of input file
+EOF
+
+    elif [ "$DOSPC_WAV" = "YES" ] && [ "$DOBLL_WAV" = "NO" ]; then
+        cat << EOF > ww3_outp_auto.inp
+$ WAVEWATCH III Point output post-processing
+$ ------------------------------------------
+  TIME  DT  COUNT
+$
+EOF
+        cat points >> ww3_outp_auto.inp
+        cat << EOF >> ww3_outp_auto.inp
+ -1
+$
+  1
+  3 0. 0. 51 FORMAT
+$
+$ End of input file
+EOF
+
+    elif [ "$DOSPC_WAV" = "YES" ] && [ "$DOBLL_WAV" = "YES" ]; then
+        cat << EOF > ww3_outp_auto.inp
+$ WAVEWATCH III Point output post-processing
+$ ------------------------------------------
+  TIME  DT  COUNT
+$
+EOF
+        cat points >> ww3_outp_auto.inp
+        cat << EOF >> ww3_outp_auto.inp
+ -1
+$
+  1
+  3 0. 0. 51 FORMAT
+$
+$ End of input file
+EOF
+
+    fi
+
+    rm points
+    N=$(( ($FHMAX_WAV_PNT - $FHMIN_WAV) + 1 ))
+    tstart="`echo $ymdh | cut -c1-8` `echo $ymdh | cut -c9-10`0000"
+    truntime="`echo $CDATE | cut -c1-8` `echo $CDATE | cut -c9-10`0000"
+    sed -e "s/TIME/$tstart/g" \
+        -e "s/DT/$dtspec/g" \
+        -e "s/COUNT/$N/g" \
+        -e "s/REFT/$truntime/g" ww3_outp_auto.inp > ww3_outp.inp
+
+    cp $DATA/mod_def.${waveuoutpGRD} mod_def.${waveuoutpGRD}
+
+    fhr=$FHMIN_WAV
+    while [ $fhr -le $FHMAX_WAV_PNT ]; do
+
+      #echo "   Creating the wave point scripts at : `date`"
+      ymdh=`$NDATE $fhr $CDATE`
+      YMD=$(echo $ymdh | cut -c1-8)
+      HMS="$(echo $ymdh | cut -c9-10)0000"
+
+      pfile=$COMIN/rundata/${WAV_MOD_TAG}.out_pnt.${waveuoutpGRD}.${YMD}.${HMS}
+      if [ -f  ${pfile} ]
+      then
+        ln -fs ${pfile}
+      else
+        echo " FATAL ERROR : NO RAW POINT OUTPUT FILE out_pnt.$waveuoutpGRD.${YMD}.${HMS} "
+        echo ' '
+        [[ "$LOUD" = YES ]] && set -x
+        err=7; export err;${errchk}
+        exit $err
+      fi
+      FHINCP=$(( DTPNT_WAV / 3600 ))
+      fhrp=$((fhr+FHINCP))
+      fhr=$fhrp # no gridded output, loop with out_pnt stride
+    done
+
+    
+    $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp.log 2>&1
+
+
+  else
   rm -f cmdfile
   touch cmdfile
   chmod 744 cmdfile
@@ -390,6 +488,7 @@
       for buoy in $buoys
       do
         echo "$USHwave/wave_outp_spec.sh $buoy $ymdh spec $SPECDATA > $SPECDATA/spec_$buoy.out 2>&1" >> tmpcmdfile.$FH3
+        #echo "strace -o strace.${buoy}.${ymdh} $USHwave/wave_outp_spec.sh $buoy $ymdh spec $SPECDATA > $SPECDATA/spec_$buoy.out 2>&1" >> tmpcmdfile.$FH3
       done
     fi
 
@@ -398,20 +497,30 @@
       export dtspec=3600.
       for buoy in $buoys
       do
-        echo "$USHwave/wave_outp_spec.sh $buoy $ymdh bull $SPECDATA > $SPECDATA/bull_$buoy.out 2>&1" >> tmpcmdfile.$FH3
+        #echo "$USHwave/wave_outp_spec.sh $buoy $ymdh bull $SPECDATA > $SPECDATA/bull_$buoy.out 2>&1" >> tmpcmdfile.$FH3
+        #echo "LD_LIBRARY_PATH="/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && $USHwave/wave_outp_spec.sh $buoy $ymdh bull $SPECDATA > $SPECDATA/bull_$buoy.out 2>&1" >> tmpcmdfile.$FH3
+        #echo "/usr/bin/mkdir -p /tmp/output_$YMDHMS; $USHwave/wave_outp_spec.sh $buoy $ymdh bull /tmp/output_$YMDHMS > $SPECDATA/bull_$buoy.out 2>&1" >> tmpcmdfile.$FH3
+        echo "/usr/bin/mkdir -p /tmp/output_$YMDHMS; LD_LIBRARY_PATH="/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && $USHwave/wave_outp_spec.sh $buoy $ymdh bull /tmp/output_$YMDHMS > $SPECDATA/bull_$buoy.out 2>&1" >> tmpcmdfile.$FH3
+        #echo "/usr/bin/mkdir -p /${SCRATCH}/output_$YMDHMS; LD_LIBRARY_PATH="/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && $USHwave/wave_outp_spec.sh $buoy $ymdh bull /${SCRATCH}/output_$YMDHMS > $SPECDATA/bull_$buoy.out 2>&1" >> tmpcmdfile.$FH3
+        #echo "/usr/bin/strace -o strace.${buoy}.${ymdh} $USHwave/wave_outp_spec.sh $buoy $ymdh bull $SPECDATA > $SPECDATA/bull_$buoy.out 2>&1" >> tmpcmdfile.$FH3
       done
     fi
 
-    split -n l/1/10  tmpcmdfile.$FH3 > cmdfile.${FH3}.01
-    split -n l/2/10  tmpcmdfile.$FH3 > cmdfile.${FH3}.02
-    split -n l/3/10  tmpcmdfile.$FH3 > cmdfile.${FH3}.03
-    split -n l/4/10  tmpcmdfile.$FH3 > cmdfile.${FH3}.04
-    split -n l/5/10  tmpcmdfile.$FH3 > cmdfile.${FH3}.05
-    split -n l/6/10  tmpcmdfile.$FH3 > cmdfile.${FH3}.06
-    split -n l/7/10  tmpcmdfile.$FH3 > cmdfile.${FH3}.07
-    split -n l/8/10  tmpcmdfile.$FH3 > cmdfile.${FH3}.08
-    split -n l/9/10  tmpcmdfile.$FH3 > cmdfile.${FH3}.09
-    split -n l/10/10 tmpcmdfile.$FH3 > cmdfile.${FH3}.10
+    for n in $(seq -w 1 10)
+    do
+      echo "export LD_LIBRARY_PATH=\"/lib64:/usr/lib64:${LD_LIBRARY_PATH}\"" > cmdfile.${FH3}.${n}
+    done
+
+    split -n l/1/10  tmpcmdfile.$FH3 >> cmdfile.${FH3}.01
+    split -n l/2/10  tmpcmdfile.$FH3 >> cmdfile.${FH3}.02
+    split -n l/3/10  tmpcmdfile.$FH3 >> cmdfile.${FH3}.03
+    split -n l/4/10  tmpcmdfile.$FH3 >> cmdfile.${FH3}.04
+    split -n l/5/10  tmpcmdfile.$FH3 >> cmdfile.${FH3}.05
+    split -n l/6/10  tmpcmdfile.$FH3 >> cmdfile.${FH3}.06
+    split -n l/7/10  tmpcmdfile.$FH3 >> cmdfile.${FH3}.07
+    split -n l/8/10  tmpcmdfile.$FH3 >> cmdfile.${FH3}.08
+    split -n l/9/10  tmpcmdfile.$FH3 >> cmdfile.${FH3}.09
+    split -n l/10/10 tmpcmdfile.$FH3 >> cmdfile.${FH3}.10
 
     rm tmpcmdfile.$FH3
     chmod 744 cmdfile.${FH3}.01 cmdfile.${FH3}.02 cmdfile.${FH3}.03 cmdfile.${FH3}.04
@@ -449,7 +558,8 @@
       else
         if [ "$ifirst" = 'yes' ]; then 
           echo "#!/bin/sh" > cmdmfile.$nfile 
-          echo "$nfile cmdmfile.$nfile" >> cmdmprog
+#         echo "$nfile cmdmfile.$nfile" >> cmdmprog
+          echo "$DATA/cmdmfile.$nfile" >> cmdmprog
           chmod 744 cmdmfile.$nfile
         fi
         echo $line >> cmdmfile.$nfile
@@ -476,13 +586,16 @@
   if [ "$wavenproc" -gt '1' ]
   then
     if [ ${CFP_MP:-"NO"} = "YES" ]; then
-      ${wavempexec} -n ${wavenproc} ${wave_mpmd} cmdmprog
+      echo "exgfs_wave_post_pnt: Running cmdmprog using ${wavempexec} on ${wavenproc}"
+      ${wavempexec} ${wave_mpmd} ${DATA}/cmdmprog
     else
+      echo "exgfs_wave_post_pnt: Running cmdfile using ${wavempexec} on ${wavenproc}. ${NTASKS}"
       ${wavempexec} ${wavenproc} ${wave_mpmd} cmdfile
     fi
     exit=$?
   else
     chmod 744 cmdfile
+    echo "exgfs_wave_post_pnt: Running cmdfile serially"
     ./cmdfile 
     exit=$?
   fi
@@ -524,7 +637,9 @@
   then
     for buoy in $buoys
     do
-      echo "$USHwave/wave_outp_cat.sh $buoy $FHMAX_WAV_PNT bull > ${CATOUTDIR}/bull_cat_$buoy.out 2>&1" >> cmdfile.bouy
+      #echo "$USHwave/wave_outp_cat.sh $buoy $FHMAX_WAV_PNT bull > ${CATOUTDIR}/bull_cat_$buoy.out 2>&1" >> cmdfile.bouy
+      echo "LD_LIBRARY_PATH="/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && $USHwave/wave_outp_cat.sh $buoy $FHMAX_WAV_PNT bull > ${CATOUTDIR}/bull_cat_$buoy.out 2>&1" >> cmdfile.bouy
+      #echo "LD_LIBRARY_PATH="/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && /usr/bin/strace -o strace.${buoy}.${ymdh}.cat $USHwave/wave_outp_cat.sh $buoy $FHMAX_WAV_PNT bull > ${CATOUTDIR}/bull_cat_$buoy.out 2>&1" >> cmdfile.bouy
     done
   fi
 
@@ -541,7 +656,8 @@
       else
         if [ "$ifirst" = 'yes' ]; then
           echo "#!/bin/sh" > cmdfile.bouy.$nfile
-          echo "$nfile cmdfile.bouy.$nfile" >> cmdmprogbouy
+#         echo "$nfile cmdfile.bouy.$nfile" >> cmdmprogbouy
+          echo "$DATA/cmdfile.bouy.$nfile" >> cmdmprogbouy
           chmod 744 cmdfile.bouy.$nfile
         fi
         echo $line >> cmdfile.bouy.$nfile
@@ -568,7 +684,7 @@
   if [ "$wavenproc" -gt '1' ]
   then
     if [ ${CFP_MP:-"NO"} = "YES" ]; then
-      ${wavempexec} -n ${wavenproc} ${wave_mpmd} cmdmprogbouy
+      ${wavempexec} ${wave_mpmd} ${DATA}/cmdmprogbouy
     else
       ${wavempexec} ${wavenproc} ${wave_mpmd} cmdfile.bouy
     fi
@@ -576,6 +692,7 @@
   else
     chmod 744 ${fcmdnow}
     ./${fcmdnow}
+    #./cmdfile.bouy
     exit=$?
   fi
 
@@ -592,7 +709,7 @@
     err=9; export err;${errchk}
     exit $err
   fi
-
+  fi # dkokron New versus Old
 
 # --------------------------------------------------------------------------- #
 # 3. Compress point output data into tar files
@@ -616,24 +733,30 @@
   if [ ${CFP_MP:-"NO"} = "YES" ]; then
     if [ "$DOBNDPNT_WAV" = YES ]; then
       if [ "$DOSPC_WAV" = YES ]; then 
-        echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG ibp $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG ibp $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+        echo "$USHwave/wave_tar.sh $WAV_MOD_TAG ibp $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
       fi 
       if [ "$DOBLL_WAV" = YES ]; then
-        echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG ibpbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG ibpbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+        echo "$USHwave/wave_tar.sh $WAV_MOD_TAG ibpbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
-        echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG ibpcbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG ibpcbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+        echo "$USHwave/wave_tar.sh $WAV_MOD_TAG ibpcbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
       fi 
     else 
       if [ "$DOSPC_WAV" = YES ]; then
-        echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG spec $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG spec $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+        echo "$USHwave/wave_tar.sh $WAV_MOD_TAG spec $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
       fi
       if [ "$DOBLL_WAV" = YES ]; then
-        echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG bull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG bull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+        echo "$USHwave/wave_tar.sh $WAV_MOD_TAG bull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
-        echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG cbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG cbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
+        echo "$USHwave/wave_tar.sh $WAV_MOD_TAG cbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
       fi 
     fi
@@ -670,7 +793,7 @@
   if [ "$wavenproc" -gt '1' ]
   then
     if [ ${CFP_MP:-"NO"} = "YES" ]; then
-      ${wavempexec} -n ${wavenproc} ${wave_mpmd} cmdtarfile
+      ${wavempexec} ${wave_mpmd} ${DATA}/cmdtarfile
     else
       ${wavempexec} ${wavenproc} ${wave_mpmd} cmdtarfile
     fi
