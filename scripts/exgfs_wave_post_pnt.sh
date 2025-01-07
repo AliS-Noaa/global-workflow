@@ -68,25 +68,19 @@
     exit $err
   fi
 
-# 0.c Defining model grids
-
-  waveuoutpGRD=${waveuoutpGRD:?buoyNotSet}
-
-# 0.c.1 Define a temporary directory for storing ascii point output files
-#       and flush it
-
   export STA_DIR=$DATA/station_ascii_files
   if [ -d $STA_DIR ]
-  then 
+  then
     rm -rf ${STA_DIR}
   fi
   mkdir -p ${STA_DIR}
   mkdir -p ${STA_DIR}/spec
   mkdir -p ${STA_DIR}/bull
   mkdir -p ${STA_DIR}/cbull
-  mkdir -p ${STA_DIR}/specfhr
-  mkdir -p ${STA_DIR}/bullfhr
-  mkdir -p ${STA_DIR}/cbullfhr
+
+# 0.b Defining model grids
+
+  waveuoutpGRD=${waveuoutpGRD:?buoyNotSet}
 
   set +x
   echo ' '
@@ -108,12 +102,6 @@
   [[ "$LOUD" = YES ]] && set -x
 
 # 1.a Model definition files and output files (set up using poe) 
-
-# 1.a.1 Set up the parallel command tasks
-
-  rm -f cmdfile
-  touch cmdfile
-  chmod 744 cmdfile
 
   [[ "$LOUD" = YES ]] && set -x
 
@@ -151,7 +139,7 @@
     fi
   done
  
-# 1.c Output locations file
+# 1.b Output locations file
 
   rm -f buoy.loc
 
@@ -186,7 +174,7 @@
     DOBLL_WAV='NO'
   fi
 
-# 1.d Input template files
+# 1.c Input template files
 
   if [ -f $FIXwave/ww3_outp_spec.inp.tmpl ]
   then
@@ -233,7 +221,7 @@
     DOBLL_WAV='NO'
   fi
 
-# 1.e Getting buoy information for points
+# 1.d Getting buoy information for points
 
   if [ "$DOSPC_WAV" = 'YES' ] || [ "$DOBLL_WAV" = 'YES' ]
   then
@@ -269,7 +257,6 @@
     export pgm=ww3_outp;. prep_step
     $EXECwave/ww3_outp ${WAV_MOD_TAG} > buoy_lst.loc 2>&1 
     export err=$?;err_chk
-
 
     if [ "$err" != '0' ] && [ ! -f buoy_log.ww3 ]
     then
@@ -319,10 +306,9 @@
       DOSPC_WAV='NO'
       DOBLL_WAV='NO'
     fi
-
  fi
 
-# 1.f Data summary
+# 1.e Data summary
 
   set +x
   echo ' '
@@ -339,133 +325,88 @@
 # --------------------------------------------------------------------------- #
 # 2. Make files for processing boundary points 
 #
-# 2.a Command file set-up
+# 2.a creating ww3_outp.inp for each jobs
 
   set +x
-  echo '   Making command file for wave post points '
+  echo '   Making input file for wave post point '
   [[ "$LOUD" = YES ]] && set -x
 
-    grep -F -f ibp_tags buoy_lst.loc | awk '{ print $1 }' > buoys
-    grep -F -f buoys buoy_log.ww3 | awk '{ print $1 }' > points
-    rm buoys
+  grep -F -f ibp_tags buoy_lst.loc | awk '{ print $1 }' > buoys
+  grep -F -f buoys buoy_log.ww3 | awk '{ print $1 }' > points
+  points=$(cat points | awk '{print $0 "\\n"}' | tr -d '\n')
+  rm buoys
+  
+  ymdh=`$NDATE -${WAVHINDH} $CDATE`
+  tstart="`echo $ymdh | cut -c1-8` `echo $ymdh | cut -c9-10`0000"
+  dtspec=3600.            # default time step (not used here)
+  N=$(( ($FHMAX_WAV_PNT - $FHMIN_WAV) + 1 ))
+  truntime="`echo $CDATE | cut -c1-8` `echo $CDATE | cut -c9-10`0000"
 
-    if [ "$DOBLL_WAV" = "YES" ] && [ "$DOSPC_WAV" = "NO" ]; then
-        cat << EOF > ww3_outp_auto.inp
-$ WAVEWATCH III Point output post-processing
-$ ------------------------------------------
-  TIME  DT  COUNT
-$
-EOF
-        cat points >> ww3_outp_auto.inp
-        cat << EOF >> ww3_outp_auto.inp
- -1
-$
-  4
-  4 1 REFT 'UTC'
-$
-$ End of input file
-EOF
+  fhr=$FHMIN_WAV
+  while [ $fhr -le $FHMAX_WAV_PNT ]; do
+    ymdh=`$NDATE $fhr $CDATE`
+    YMD=$(echo $ymdh | cut -c1-8)
+    HMS="$(echo $ymdh | cut -c9-10)0000"
 
-    elif [ "$DOSPC_WAV" = "YES" ] && [ "$DOBLL_WAV" = "NO" ]; then
-        cat << EOF > ww3_outp_auto.inp
-$ WAVEWATCH III Point output post-processing
-$ ------------------------------------------
-  TIME  DT  COUNT
-$
-EOF
-        cat points >> ww3_outp_auto.inp
-        cat << EOF >> ww3_outp_auto.inp
- -1
-$
-  1
-  3 0. 0. 51 FORMAT
-$
-$ End of input file
-EOF
-
-    elif [ "$DOSPC_WAV" = "YES" ] && [ "$DOBLL_WAV" = "YES" ]; then
-        cat << EOF > ww3_outp_auto.inp
-$ WAVEWATCH III Point output post-processing
-$ ------------------------------------------
-  TIME  DT  COUNT
-$
-EOF
-        cat points >> ww3_outp_auto.inp
-        cat << EOF >> ww3_outp_auto.inp
- -1
-$
-  1
-  3 0. 0. 51 FORMAT
-$
-$ End of input file
-EOF
-
+    pfile=$COMIN/rundata/${WAV_MOD_TAG}.out_pnt.${waveuoutpGRD}.${YMD}.${HMS}
+    if [ -f  ${pfile} ]
+    then
+      ln -fs ${pfile}
+    else
+      echo " FATAL ERROR : NO RAW POINT OUTPUT FILE out_pnt.$waveuoutpGRD.${YMD}.${HMS} "
+      echo ' '
+      [[ "$LOUD" = YES ]] && set -x
+      err=7; export err;${errchk}
+      exit $err
     fi
+    FHINCP=$(( DTPNT_WAV / 3600 ))
+    fhrp=$((fhr+FHINCP))
+    fhr=$fhrp # no gridded output, loop with out_pnt stride
+  done
 
-    #rm points
-    N=$(( ($FHMAX_WAV_PNT - $FHMIN_WAV) + 1 ))
-    tstart="`echo $ymdh | cut -c1-8` `echo $ymdh | cut -c9-10`0000"
-    truntime="`echo $CDATE | cut -c1-8` `echo $CDATE | cut -c9-10`0000"
+  if [ "$DOSPC_WAV" = 'YES' ] && [ "$DOBLL_WAV" = "NO" ]; then
     sed -e "s/TIME/$tstart/g" \
         -e "s/DT/$dtspec/g" \
-        -e "s/COUNT/$N/g" \
-        -e "s/REFT/$truntime/g" ww3_outp_auto.inp > ww3_outp.inp
+	-e "s/999/$N/g" \
+        -e "s|POINT|$points|g" \
+        -e "s/ITYPE/1/g" \
+        -e "s/FORMAT/F/g" \
+                               ww3_outp_spec.inp.tmpl > ww3_outp.inp
+  
+    $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp_spec.log 2>&1
 
-    cp $DATA/mod_def.${waveuoutpGRD} mod_def.${waveuoutpGRD}
-
-    fhr=$FHMIN_WAV
-    while [ $fhr -le $FHMAX_WAV_PNT ]; do
-
-      #echo "   Creating the wave point scripts at : `date`"
-      ymdh=`$NDATE $fhr $CDATE`
-      YMD=$(echo $ymdh | cut -c1-8)
-      HMS="$(echo $ymdh | cut -c9-10)0000"
-
-      pfile=$COMIN/rundata/${WAV_MOD_TAG}.out_pnt.${waveuoutpGRD}.${YMD}.${HMS}
-      if [ -f  ${pfile} ]
-      then
-        ln -fs ${pfile}
-      else
-        echo " FATAL ERROR : NO RAW POINT OUTPUT FILE out_pnt.$waveuoutpGRD.${YMD}.${HMS} "
-        echo ' '
-        [[ "$LOUD" = YES ]] && set -x
-        err=7; export err;${errchk}
-        exit $err
-      fi
-      FHINCP=$(( DTPNT_WAV / 3600 ))
-      fhrp=$((fhr+FHINCP))
-      fhr=$fhrp # no gridded output, loop with out_pnt stride
-    done
-
-    $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp.log 2>&1
-
-  if [ "$DOSPC_WAV" = "YES" ] && [ "$DOBLL_WAV" = "YES" ]; then
-    cat << EOF > ww3_outp_auto.inp
-$ WAVEWATCH III Point output post-processing
-$ ------------------------------------------
-  TIME  DT  COUNT
-$
-EOF
-    cat points >> ww3_outp_auto.inp
-    cat << EOF >> ww3_outp_auto.inp
- -1
-$
-  4
-  4 1 REFT 'UTC'
-$
-$ End of input file
-EOF
-
-    rm points  
+  elif [ "$DOSPC_WAV" = 'NO' ] && [ "$DOBLL_WAV" = "YES" ]; then
     sed -e "s/TIME/$tstart/g" \
         -e "s/DT/$dtspec/g" \
-        -e "s/COUNT/$N/g" \
-        -e "s/REFT/$truntime/g" ww3_outp_auto.inp > ww3_outp.inp
+        -e "s/999/$N/g" \
+        -e "s|POINT|$points|g" \
+        -e "s/REFT/$truntime/g" \
+	                       ww3_outp_bull.inp.tmpl > ww3_outp.inp
+    
+    $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp_bull.log 2>&1
 
-    $EXECwave/ww3_outp ${WAV_MOD_TAG} 1>> ww3_outp.log 2>&1
+  elif [[ "$DOSPC_WAV" == "YES" && "$DOBLL_WAV" == "YES" ]]; then
+    sed -e "s/TIME/$tstart/g" \
+        -e "s/DT/$dtspec/g" \
+        -e "s/999/$N/g" \
+        -e "s|POINT|$points|g" \
+        -e "s/ITYPE/1/g" \
+        -e "s/FORMAT/F/g" \
+                               ww3_outp_spec.inp.tmpl > ww3_outp.inp
 
+    $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp_spec.log 2>&1
+
+    sed -e "s/TIME/$tstart/g" \
+        -e "s/DT/$dtspec/g" \
+        -e "s/999/$N/g" \
+        -e "s|POINT|$points|g" \
+        -e "s/REFT/$truntime/g" \
+                               ww3_outp_bull.inp.tmpl > ww3_outp.inp
+
+    $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp_bull.log 2>&1
 
   fi
+
 # --------------------------------------------------------------------------- #
 # 3. Compress point output data into tar files
 
@@ -488,29 +429,23 @@ EOF
   if [ ${CFP_MP:-"NO"} = "YES" ]; then
     if [ "$DOBNDPNT_WAV" = YES ]; then
       if [ "$DOSPC_WAV" = YES ]; then 
-#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG ibp $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         echo "$USHwave/wave_tar.sh $WAV_MOD_TAG ibp $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
       fi 
       if [ "$DOBLL_WAV" = YES ]; then
-#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG ibpbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         echo "$USHwave/wave_tar.sh $WAV_MOD_TAG ibpbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
-#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG ibpcbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         echo "$USHwave/wave_tar.sh $WAV_MOD_TAG ibpcbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
       fi 
     else 
       if [ "$DOSPC_WAV" = YES ]; then
-#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG spec $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         echo "$USHwave/wave_tar.sh $WAV_MOD_TAG spec $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
       fi
       if [ "$DOBLL_WAV" = YES ]; then
-#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG bull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         echo "$USHwave/wave_tar.sh $WAV_MOD_TAG bull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
-#       echo "$nm $USHwave/wave_tar.sh $WAV_MOD_TAG cbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         echo "$USHwave/wave_tar.sh $WAV_MOD_TAG cbull $Nb > ${WAV_MOD_TAG}_spec_tar.out 2>&1 "   >> cmdtarfile
         nm=$(( nm + 1 ))
       fi 
