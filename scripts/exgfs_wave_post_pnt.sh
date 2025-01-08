@@ -364,7 +364,7 @@
     fhr=$fhrp # no gridded output, loop with out_pnt stride
   done
 
-  if [ "$DOSPC_WAV" = 'YES' ] && [ "$DOBLL_WAV" = "NO" ]; then
+  if [ "$DOSPC_WAV" = 'YES' ]; then
     sed -e "s/TIME/$tstart/g" \
         -e "s/DT/$dtspec/g" \
 	-e "s/999/$N/g" \
@@ -372,10 +372,12 @@
         -e "s/ITYPE/1/g" \
         -e "s/FORMAT/F/g" \
                                ww3_outp_spec.inp.tmpl > ww3_outp.inp
-  
+   
     $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp_spec.log 2>&1
 
-  elif [ "$DOSPC_WAV" = 'NO' ] && [ "$DOBLL_WAV" = "YES" ]; then
+  fi
+
+  if [ "$DOBLL_WAV" = "YES" ]; then
     sed -e "s/TIME/$tstart/g" \
         -e "s/DT/$dtspec/g" \
         -e "s/999/$N/g" \
@@ -384,27 +386,6 @@
 	                       ww3_outp_bull.inp.tmpl > ww3_outp.inp
     
     $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp_bull.log 2>&1
-
-  elif [[ "$DOSPC_WAV" == "YES" && "$DOBLL_WAV" == "YES" ]]; then
-    sed -e "s/TIME/$tstart/g" \
-        -e "s/DT/$dtspec/g" \
-        -e "s/999/$N/g" \
-        -e "s|POINT|$points|g" \
-        -e "s/ITYPE/1/g" \
-        -e "s/FORMAT/F/g" \
-                               ww3_outp_spec.inp.tmpl > ww3_outp.inp
-
-    $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp_spec.log 2>&1
-
-    sed -e "s/TIME/$tstart/g" \
-        -e "s/DT/$dtspec/g" \
-        -e "s/999/$N/g" \
-        -e "s|POINT|$points|g" \
-        -e "s/REFT/$truntime/g" \
-                               ww3_outp_bull.inp.tmpl > ww3_outp.inp
-
-    $EXECwave/ww3_outp ${WAV_MOD_TAG} 1> ww3_outp_bull.log 2>&1
-
   fi
 
 # --------------------------------------------------------------------------- #

@@ -93,7 +93,7 @@ elif [ $step = "wavepostbndpnt" ]; then
     export wtime_wavepostbndpnt="00:30:00"
     export npe_wavepostbndpnt=1
     export nth_wavepostbndpnt=1
-    export npe_node_wavepostbndpnt=1
+    export npe_node_wavepostbndpnt=${npe_wavepostbndpnt}
     export NTASKS=$npe_wavepostbndpnt
 
 elif [ $step = "wavepostbndpntbll" ]; then
@@ -101,7 +101,7 @@ elif [ $step = "wavepostbndpntbll" ]; then
     export wtime_wavepostbndpntbll="00:10:00"
     export npe_wavepostbndpntbll=2
     export nth_wavepostbndpntbll=1
-    export npe_node_wavepostbndpntbll=2
+    export npe_node_wavepostbndpntbll=${npe_wavepostbndpntbll}
     export NTASKS=$npe_wavepostbndpntbll
 
 elif [ $step = "wavepostpnt" ]; then
@@ -109,7 +109,7 @@ elif [ $step = "wavepostpnt" ]; then
     export wtime_wavepostpnt="00:35:00"
     export npe_wavepostpnt=3
     export nth_wavepostpnt=1
-    export npe_node_wavepostpnt=3
+    export npe_node_wavepostpnt=${npe_wavepostpnt}
     export NTASKS=$npe_wavepostpnt
 
 elif [ $step = "wavegempak" ]; then
